@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Session } from "@supabase/supabase-js";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 
 interface Order {
   id: string;
@@ -26,6 +27,27 @@ export default function Profile() {
   const [profile, setProfile] = useState<any>(null);
 
   useEffect(() => {
+    const handlePaymentSuccess = async (sessionIdParam: string, userId: string) => {
+      try {
+        const { error } = await supabase.functions.invoke('create-order', {
+          body: { sessionId: sessionIdParam }
+        });
+        
+        if (!error) {
+          toast.success("Order placed successfully!");
+          fetchOrders(userId);
+        } else {
+          toast.error("Failed to process order");
+        }
+      } catch (error) {
+        console.error("Error processing order:", error);
+        toast.error("Failed to process order");
+      }
+      
+      // Clean up URL
+      window.history.replaceState({}, '', '/profile');
+    };
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (!session) {
@@ -33,6 +55,13 @@ export default function Profile() {
       } else {
         fetchProfile(session.user.id);
         fetchOrders(session.user.id);
+        
+        // Check for payment success callback
+        const params = new URLSearchParams(window.location.search);
+        const sessionId = params.get('session_id');
+        if (sessionId) {
+          handlePaymentSuccess(sessionId, session.user.id);
+        }
       }
     });
 
