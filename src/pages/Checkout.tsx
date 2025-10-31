@@ -112,21 +112,25 @@ export default function Checkout() {
         }
       });
 
-      console.log("Checkout session response:", { data, error });
+      console.log("Full response:", { data, error, dataType: typeof data, dataKeys: data ? Object.keys(data) : null });
 
       if (error) {
         console.error("Checkout error:", error);
         throw new Error(error.message || "Failed to create checkout session");
       }
 
-      if (!data?.url) {
-        console.error("No checkout URL received:", data);
+      // Check if data exists and has url
+      const checkoutUrl = data?.url;
+      console.log("Checkout URL:", checkoutUrl);
+
+      if (!checkoutUrl) {
+        console.error("No checkout URL received. Full data:", JSON.stringify(data));
         throw new Error("No checkout URL received from server");
       }
 
       // Redirect to Stripe Checkout
-      console.log("Redirecting to Stripe:", data.url);
-      window.location.href = data.url;
+      console.log("Redirecting to Stripe:", checkoutUrl);
+      window.location.href = checkoutUrl;
     } catch (error) {
       console.error("Checkout submission error:", error);
       if (error instanceof z.ZodError) {
