@@ -100,37 +100,47 @@ export default function Checkout() {
 
     try {
       // Validate form data
-      checkoutSchema.parse(shippingData);
+      const validatedData = checkoutSchema.parse(shippingData);
+      console.log("✅ Validation passed:", validatedData);
 
-      console.log("Creating checkout session...", { cartItems, shippingData });
+      console.log("📤 Creating checkout session...");
 
       // Create checkout session
-      const { data, error } = await supabase.functions.invoke('create-payment-intent', {
+      const response = await supabase.functions.invoke('create-payment-intent', {
         body: {
           cartItems,
           shippingInfo: shippingData
         }
       });
 
-      console.log("Full response:", { data, error, dataType: typeof data, dataKeys: data ? Object.keys(data) : null });
+      console.log("📦 Raw response:", response);
+      console.log("📦 Response data:", response.data);
+      console.log("📦 Response error:", response.error);
 
-      if (error) {
-        console.error("Checkout error:", error);
-        throw new Error(error.message || "Failed to create checkout session");
+      if (response.error) {
+        console.error("❌ Edge function error:", response.error);
+        throw new Error(response.error.message || "Failed to create checkout session");
       }
 
-      // Check if data exists and has url
-      const checkoutUrl = data?.url;
-      console.log("Checkout URL:", checkoutUrl);
+      // Get the URL from response
+      const checkoutUrl = response.data?.url;
+      console.log("🔗 Checkout URL extracted:", checkoutUrl);
+      console.log("🔗 URL type:", typeof checkoutUrl);
 
-      if (!checkoutUrl) {
-        console.error("No checkout URL received. Full data:", JSON.stringify(data));
-        throw new Error("No checkout URL received from server");
+      if (!checkoutUrl || typeof checkoutUrl !== 'string') {
+        console.error("❌ Invalid checkout URL. Full response data:", JSON.stringify(response.data, null, 2));
+        throw new Error("No valid checkout URL received from server");
       }
 
       // Redirect to Stripe Checkout
-      console.log("Redirecting to Stripe:", checkoutUrl);
-      window.location.href = checkoutUrl;
+      console.log("🚀 Attempting redirect to:", checkoutUrl);
+      toast.success("Redirecting to payment...");
+      
+      // Use a small delay to ensure the toast shows
+      setTimeout(() => {
+        window.location.href = checkoutUrl;
+      }, 500);
+      
     } catch (error) {
       console.error("Checkout submission error:", error);
       if (error instanceof z.ZodError) {
