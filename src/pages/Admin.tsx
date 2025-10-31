@@ -115,12 +115,12 @@ export default function Admin() {
         image_url: formData.get("image_url") as string || null,
       };
 
-      const validated = productSchema.parse(productData);
+      productSchema.parse(productData);
 
       if (editingProduct) {
         const { error } = await supabase
           .from("products")
-          .update(validated)
+          .update(productData)
           .eq("id", editingProduct.id);
 
         if (error) throw error;
@@ -128,7 +128,7 @@ export default function Admin() {
       } else {
         const { error } = await supabase
           .from("products")
-          .insert([validated]);
+          .insert([productData]);
 
         if (error) throw error;
         toast.success("Product created successfully");
