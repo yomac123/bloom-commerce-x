@@ -74,7 +74,18 @@ export default function Checkout() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!session || cartItems.length === 0) return;
+    
+    if (!session) {
+      toast.error("Please sign in to continue");
+      navigate("/auth");
+      return;
+    }
+
+    if (cartItems.length === 0) {
+      toast.error("Your cart is empty");
+      navigate("/cart");
+      return;
+    }
 
     setLoading(true);
 
@@ -88,7 +99,10 @@ export default function Checkout() {
     };
 
     try {
+      // Validate form data
       checkoutSchema.parse(shippingData);
+
+      console.log("Creating checkout session...", { cartItems, shippingData });
 
       // Create checkout session
       const { data, error } = await supabase.functions.invoke('create-payment-intent', {
@@ -98,17 +112,30 @@ export default function Checkout() {
         }
       });
 
-      if (error) throw error;
+      console.log("Checkout session response:", { data, error });
+
+      if (error) {
+        console.error("Checkout error:", error);
+        throw new Error(error.message || "Failed to create checkout session");
+      }
+
+      if (!data?.url) {
+        console.error("No checkout URL received:", data);
+        throw new Error("No checkout URL received from server");
+      }
 
       // Redirect to Stripe Checkout
-      if (data.url) {
-        window.location.href = data.url;
-      }
+      console.log("Redirecting to Stripe:", data.url);
+      window.location.href = data.url;
     } catch (error) {
+      console.error("Checkout submission error:", error);
       if (error instanceof z.ZodError) {
-        toast.error(error.errors[0].message);
+        const fieldErrors = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+        toast.error(`Validation error: ${fieldErrors}`);
+      } else if (error instanceof Error) {
+        toast.error(error.message);
       } else {
-        toast.error("Failed to initiate checkout");
+        toast.error("Failed to initiate checkout. Please try again.");
       }
       setLoading(false);
     }
