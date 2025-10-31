@@ -8,6 +8,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Session } from "@supabase/supabase-js";
 import { z } from "zod";
+import { Elements } from '@stripe/react-stripe-js';
+import { stripePromise } from '@/lib/stripe';
+import { PaymentForm } from '@/components/PaymentForm';
 
 const checkoutSchema = z.object({
   fullName: z.string().min(2).max(100),
@@ -33,6 +36,8 @@ export default function Checkout() {
   const [session, setSession] = useState<Session | null>(null);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [clientSecret, setClientSecret] = useState<string>("");
+  const [shippingInfo, setShippingInfo] = useState<any>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -72,7 +77,7 @@ export default function Checkout() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleShippingSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!session) return;
 
@@ -89,19 +94,39 @@ export default function Checkout() {
 
     try {
       const validated = checkoutSchema.parse(shippingData);
-      const total = cartItems.reduce(
-        (sum, item) => sum + item.products.price * item.quantity,
-        0
-      );
+      setShippingInfo(validated);
 
+      // Create payment intent
+      const { data, error } = await supabase.functions.invoke('create-payment-intent', {
+        body: { amount: total }
+      });
+
+      if (error) throw error;
+      setClientSecret(data.clientSecret);
+      toast.success("Proceed to payment");
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast.error(error.errors[0].message);
+      } else {
+        toast.error("Failed to process shipping information");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePaymentSuccess = async (paymentIntentId: string) => {
+    if (!session || !shippingInfo) return;
+
+    try {
       // Create order
       const { data: order, error: orderError } = await supabase
         .from("orders")
         .insert({
           user_id: session.user.id,
           total_amount: total,
-          payment_status: "pending",
-          shipping_address: validated,
+          payment_status: "completed",
+          shipping_address: shippingInfo,
         })
         .select()
         .single();
@@ -134,13 +159,8 @@ export default function Checkout() {
       toast.success("Order placed successfully!");
       navigate("/profile");
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        toast.error(error.errors[0].message);
-      } else {
-        toast.error("Failed to place order");
-      }
-    } finally {
-      setLoading(false);
+      toast.error("Failed to complete order");
+      console.error(error);
     }
   };
 
@@ -162,44 +182,53 @@ export default function Checkout() {
 
         <div className="grid lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="bg-card p-6 rounded-lg border">
-                <h2 className="text-2xl font-bold mb-4">Shipping Information</h2>
-                
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="fullName">Full Name</Label>
-                    <Input id="fullName" name="fullName" required />
-                  </div>
+            {!clientSecret ? (
+              <form onSubmit={handleShippingSubmit} className="space-y-6">
+                <div className="bg-card p-6 rounded-lg border">
+                  <h2 className="text-2xl font-bold mb-4">Shipping Information</h2>
                   
-                  <div>
-                    <Label htmlFor="email">Email</Label>
-                    <Input id="email" name="email" type="email" required />
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="address">Address</Label>
-                    <Input id="address" name="address" required />
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-4">
                     <div>
-                      <Label htmlFor="city">City</Label>
-                      <Input id="city" name="city" required />
+                      <Label htmlFor="fullName">Full Name</Label>
+                      <Input id="fullName" name="fullName" required />
                     </div>
                     
                     <div>
-                      <Label htmlFor="zipCode">ZIP Code</Label>
-                      <Input id="zipCode" name="zipCode" required />
+                      <Label htmlFor="email">Email</Label>
+                      <Input id="email" name="email" type="email" required />
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="address">Address</Label>
+                      <Input id="address" name="address" required />
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="city">City</Label>
+                        <Input id="city" name="city" required />
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="zipCode">ZIP Code</Label>
+                        <Input id="zipCode" name="zipCode" required />
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              <Button type="submit" size="lg" className="w-full" disabled={loading}>
-                {loading ? "Processing..." : "Place Order"}
-              </Button>
-            </form>
+                <Button type="submit" size="lg" className="w-full" disabled={loading}>
+                  {loading ? "Processing..." : "Continue to Payment"}
+                </Button>
+              </form>
+            ) : (
+              <div className="bg-card p-6 rounded-lg border">
+                <h2 className="text-2xl font-bold mb-4">Payment Information</h2>
+                <Elements stripe={stripePromise} options={{ clientSecret }}>
+                  <PaymentForm onSuccess={handlePaymentSuccess} />
+                </Elements>
+              </div>
+            )}
           </div>
 
           <div className="lg:col-span-1">
