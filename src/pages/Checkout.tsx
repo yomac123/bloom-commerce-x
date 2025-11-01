@@ -133,13 +133,17 @@ export default function Checkout() {
       }
 
       // Redirect to Stripe Checkout
-      console.log("🚀 Attempting redirect to:", checkoutUrl);
-      toast.success("Redirecting to payment...");
+      console.log("🚀 Opening Stripe checkout:", checkoutUrl);
+      toast.success("Opening payment window...");
       
-      // Use a small delay to ensure the toast shows
-      setTimeout(() => {
-        window.location.href = checkoutUrl;
-      }, 500);
+      // Open Stripe in new tab (more reliable than window.location)
+      const paymentWindow = window.open(checkoutUrl, '_blank');
+      
+      if (!paymentWindow) {
+        toast.error("Please allow pop-ups to complete payment");
+      } else {
+        setLoading(false);
+      }
       
     } catch (error) {
       console.error("Checkout submission error:", error);
