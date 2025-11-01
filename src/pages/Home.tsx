@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Shield, Truck, CreditCard } from "lucide-react";
 import heroImage from "@/assets/hero-image.jpg";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import Autoplay from "embla-carousel-autoplay";
 
@@ -17,6 +17,9 @@ interface Product {
 
 export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
+  const autoplayPlugin = useRef(
+    Autoplay({ delay: 3000, stopOnInteraction: true })
+  );
 
   useEffect(() => {
     fetchProducts();
@@ -52,11 +55,7 @@ export default function Home() {
               align: "start",
               loop: true,
             }}
-            plugins={[
-              Autoplay({
-                delay: 3000,
-              }),
-            ]}
+            plugins={[autoplayPlugin.current]}
             className="w-full max-w-5xl mx-auto"
           >
             <CarouselContent>
