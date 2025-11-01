@@ -3,44 +3,96 @@ import { Navbar } from "@/components/Navbar";
 import { Link } from "react-router-dom";
 import { ArrowRight, Shield, Truck, CreditCard } from "lucide-react";
 import heroImage from "@/assets/hero-image.jpg";
+import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import Autoplay from "embla-carousel-autoplay";
+
+interface Product {
+  id: string;
+  name: string;
+  price: number;
+  image_url: string;
+}
 
 export default function Home() {
+  const [products, setProducts] = useState<Product[]>([]);
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    const { data } = await supabase
+      .from("products")
+      .select("id, name, price, image_url")
+      .limit(6);
+    
+    if (data) {
+      setProducts(data);
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
       
-      {/* Hero Section */}
-      <section className="relative h-[600px] flex items-center">
-        <div className="absolute inset-0 z-0">
-          <img 
-            src={heroImage} 
-            alt="Premium products" 
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-r from-background/95 via-background/80 to-background/30" />
-        </div>
-        
-        <div className="container relative z-10">
-          <div className="max-w-2xl space-y-6">
-            <h1 className="text-5xl md:text-6xl font-bold leading-tight">
-              Discover Premium Products
-            </h1>
+      {/* Featured Products Carousel */}
+      <section className="py-20 bg-gradient-to-br from-background via-muted/30 to-background">
+        <div className="container">
+          <div className="text-center mb-12">
+            <h2 className="text-4xl md:text-5xl font-bold mb-4">Featured Products</h2>
             <p className="text-xl text-muted-foreground">
-              Shop the latest tech, accessories, and more with fast shipping and secure checkout.
+              Discover our premium selection
             </p>
-            <div className="flex gap-4">
-              <Link to="/products">
-                <Button size="lg" variant="hero" className="group">
-                  Shop Now
-                  <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
-                </Button>
-              </Link>
-              <Link to="/auth">
-                <Button size="lg" variant="outline">
-                  Sign Up
-                </Button>
-              </Link>
-            </div>
+          </div>
+          
+          <Carousel
+            opts={{
+              align: "start",
+              loop: true,
+            }}
+            plugins={[
+              Autoplay({
+                delay: 3000,
+              }),
+            ]}
+            className="w-full max-w-5xl mx-auto"
+          >
+            <CarouselContent>
+              {products.map((product) => (
+                <CarouselItem key={product.id} className="md:basis-1/2 lg:basis-1/3">
+                  <Link to={`/products/${product.id}`}>
+                    <div className="p-4">
+                      <div className="group relative overflow-hidden rounded-lg border bg-card transition-all hover:shadow-xl hover:scale-105">
+                        <div className="aspect-square overflow-hidden bg-muted">
+                          <img
+                            src={product.image_url}
+                            alt={product.name}
+                            className="h-full w-full object-cover transition-transform group-hover:scale-110"
+                          />
+                        </div>
+                        <div className="p-4">
+                          <h3 className="font-semibold text-lg mb-2 line-clamp-1">{product.name}</h3>
+                          <p className="text-2xl font-bold text-primary">${product.price}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+            <CarouselPrevious className="left-4" />
+            <CarouselNext className="right-4" />
+          </Carousel>
+
+          <div className="text-center mt-12">
+            <Link to="/products">
+              <Button size="lg" className="group">
+                View All Products
+                <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
+              </Button>
+            </Link>
           </div>
         </div>
       </section>
