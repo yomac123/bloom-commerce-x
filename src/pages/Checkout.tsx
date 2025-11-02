@@ -106,29 +106,29 @@ export default function Checkout() {
       console.log("📤 Creating checkout session...");
 
       // Create checkout session
-      const response = await supabase.functions.invoke('create-payment-intent', {
-        body: {
-          cartItems,
-          shippingInfo: shippingData
+      const { data, error } = await supabase.functions.invoke(
+        "create-payment-intent",
+        {
+          body: { shippingInfo: validatedData },
         }
-      });
+      );
 
-      console.log("📦 Raw response:", response);
-      console.log("📦 Response data:", response.data);
-      console.log("📦 Response error:", response.error);
+      console.log("📦 Raw response:", data);
+      console.log("📦 Response data:", data);
+      console.log("📦 Response error:", error);
 
-      if (response.error) {
-        console.error("❌ Edge function error:", response.error);
-        throw new Error(response.error.message || "Failed to create checkout session");
+      if (error) {
+        console.error("❌ Edge function error:", error);
+        throw new Error(error.message || "Failed to create checkout session");
       }
 
       // Get the URL from response
-      const checkoutUrl = response.data?.url;
+      const checkoutUrl = data?.url;
       console.log("🔗 Checkout URL extracted:", checkoutUrl);
       console.log("🔗 URL type:", typeof checkoutUrl);
 
       if (!checkoutUrl || typeof checkoutUrl !== 'string') {
-        console.error("❌ Invalid checkout URL. Full response data:", JSON.stringify(response.data, null, 2));
+        console.error("❌ Invalid checkout URL. Full response data:", JSON.stringify(data, null, 2));
         throw new Error("No valid checkout URL received from server");
       }
 

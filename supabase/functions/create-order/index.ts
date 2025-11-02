@@ -12,12 +12,25 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabaseClient = createClient(
+  // Authenticate the request first using ANON_KEY
+  const authClient = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    Deno.env.get("SUPABASE_ANON_KEY") ?? ""
   );
 
   try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      throw new Error("Unauthorized: No authorization header");
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await authClient.auth.getUser(token);
+    
+    if (authError || !user) {
+      throw new Error("Unauthorized: Invalid token");
+    }
+
     const { sessionId } = await req.json();
     
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
@@ -27,11 +40,21 @@ serve(async (req) => {
     // Retrieve checkout session
     const session = await stripe.checkout.sessions.retrieve(sessionId);
     
+    // Verify the session belongs to the authenticated user
+    const userId = session.metadata?.user_id;
+    if (userId !== user.id) {
+      throw new Error("Unauthorized: Session does not belong to user");
+    }
+    
     if (session.payment_status !== "paid") {
       throw new Error("Payment not completed");
     }
 
-    const userId = session.metadata?.user_id;
+    // Use SERVICE_ROLE_KEY only for cart operations after authentication
+    const supabaseClient = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    );
     const shippingInfo = JSON.parse(session.metadata?.shipping_info || "{}");
 
     // Fetch cart items
@@ -97,7 +120,8 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error("Error creating order:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+    return new Response(JSON.stringify({ error: errorMessage }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
     });

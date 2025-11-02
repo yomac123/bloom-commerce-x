@@ -24,7 +24,34 @@ serve(async (req) => {
     const user = data.user;
     if (!user?.email) throw new Error("User not authenticated");
 
-    const { cartItems, shippingInfo } = await req.json();
+    const { shippingInfo } = await req.json();
+    
+    // Fetch cart items from database using authenticated user's ID
+    const { data: cartItems, error: cartError } = await supabaseClient
+      .from("cart")
+      .select(`
+        quantity,
+        products!inner (
+          id,
+          name,
+          price,
+          stock
+        )
+      `)
+      .eq("user_id", user.id);
+    
+    if (cartError) throw cartError;
+    if (!cartItems || cartItems.length === 0) {
+      throw new Error("Cart is empty");
+    }
+    
+    // Validate stock availability
+    for (const item of cartItems) {
+      const product = item.products as any;
+      if (item.quantity > product.stock) {
+        throw new Error(`Insufficient stock for ${product.name}`);
+      }
+    }
     
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
       apiVersion: "2025-08-27.basil",
@@ -37,14 +64,14 @@ serve(async (req) => {
       customerId = customers.data[0].id;
     }
 
-    // Create line items from cart
+    // Create line items using database prices (not client data)
     const lineItems = cartItems.map((item: any) => ({
       price_data: {
         currency: 'usd',
         product_data: {
           name: item.products.name,
         },
-        unit_amount: Math.round(item.products.price * 100),
+        unit_amount: Math.round(item.products.price * 100), // Database price
       },
       quantity: item.quantity,
     }));
@@ -69,7 +96,8 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error("Error creating checkout session:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+    return new Response(JSON.stringify({ error: errorMessage }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
     });
