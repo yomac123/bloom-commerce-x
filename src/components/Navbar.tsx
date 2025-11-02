@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ShoppingCart, User, Store, LogOut } from "lucide-react";
+import { User, Store, LogOut } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
 import { Session } from "@supabase/supabase-js";
@@ -10,20 +10,18 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Badge } from "@/components/ui/badge";
+import { CartDrawer } from "@/components/CartDrawer";
 
 export const Navbar = () => {
   const navigate = useNavigate();
   const [session, setSession] = useState<Session | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [cartCount, setCartCount] = useState(0);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session) {
         checkAdminStatus(session.user.id);
-        fetchCartCount(session.user.id);
       }
     });
 
@@ -31,10 +29,8 @@ export const Navbar = () => {
       setSession(session);
       if (session) {
         checkAdminStatus(session.user.id);
-        fetchCartCount(session.user.id);
       } else {
         setIsAdmin(false);
-        setCartCount(0);
       }
     });
 
@@ -52,18 +48,6 @@ export const Navbar = () => {
     setIsAdmin(!!data);
   };
 
-  const fetchCartCount = async (userId: string) => {
-    const { data, error } = await supabase
-      .from("cart")
-      .select("quantity")
-      .eq("user_id", userId);
-    
-    if (!error && data) {
-      const total = data.reduce((sum, item) => sum + item.quantity, 0);
-      setCartCount(total);
-    }
-  };
-
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate("/");
@@ -78,22 +62,13 @@ export const Navbar = () => {
         </Link>
 
         <div className="flex items-center gap-4">
-          <Link to="/products">
+          <Link to="/">
             <Button variant="ghost">Products</Button>
           </Link>
 
           {session ? (
             <>
-              <Link to="/cart" className="relative">
-                <Button variant="ghost" size="icon">
-                  <ShoppingCart className="h-5 w-5" />
-                  {cartCount > 0 && (
-                    <Badge className="absolute -right-2 -top-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
-                      {cartCount}
-                    </Badge>
-                  )}
-                </Button>
-              </Link>
+              <CartDrawer />
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
